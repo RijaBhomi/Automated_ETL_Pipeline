@@ -6,7 +6,6 @@
 # 3. prevent duplicates so if the pipeline runs twice in the same minute it doesnt save the same data twice
 
 import logging
-from tkinter import INSERT
 import pandas as pd
 from sqlalchemy import create_engine, text
 from datetime import datetime
@@ -39,7 +38,7 @@ def create_table_if_not_exists():
         temperature REAL,
         humidity REAL,
         wind_speed REAL,
-        weather_desc TEXT,
+        weather_description TEXT,
         aqi INTEGER,
         aqi_label TEXT,
         pm25 REAL,
@@ -101,10 +100,10 @@ def save_to_db(df: pd.DataFrame) ->int:
             conn.execute(text("""
                 INSERT INTO readings
                     (city, timestamp, temperature, humidity, wind_speed,
-                     weather_desc, aqi, aqi_label, pm25, pm10, co, health_risk)
+                     weather_description, aqi, aqi_label, pm25, pm10, co, health_risk)
                 VALUES
                     (:city, :timestamp, :temperature, :humidity, :wind_speed,
-                     :weather_desc, :aqi, :aqi_label, :pm25, :pm10, :co, :health_risk)
+                     :weather_description, :aqi, :aqi_label, :pm25, :pm10, :co, :health_risk)
             """), row.to_dict())
             # row.to_dict() converts the row into a dict like
             # {"city": "Kathmandu", "timestamp": "2024-06-01 12:00:00", "temperature": 25.5, ...}
@@ -137,7 +136,7 @@ if __name__ == "__main__":
         "temperature":  [18.12, 22.5],
         "humidity":     [63.0, 70.0],
         "wind_speed":   [7.2, 3.1],
-        "weather_desc": ["scattered clouds", "clear sky"],
+        "weather_description": ["scattered clouds", "clear sky"],
         "aqi":          [5, 2],
         "aqi_label":    ["Very Poor", "Fair"],
         "pm25":         [80.81, 8.5],
