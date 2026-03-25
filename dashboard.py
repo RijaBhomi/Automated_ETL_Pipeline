@@ -4,6 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from load import read_from_db
 from datetime import datetime
+from forecast import linear_forecast, prophet_forecast
 
 st.set_page_config(
     page_title="Nepal AQI Monitor",
@@ -211,12 +212,12 @@ def main():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
+
     # ── main content: map + trends ─────────────────────────────
     map_col, trend_col = st.columns([6, 4], gap="medium")
 
     with map_col:
-        st.markdown('<div class="section-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">Interactive Air Map</div>', unsafe_allow_html=True)
+        st.markdown("#### 🗺️ Interactive Air Map")
 
         city_coords = {
             "Kathmandu":  (27.7172, 85.3240),
@@ -272,8 +273,7 @@ def main():
         st.markdown('</div>', unsafe_allow_html=True)
 
     with trend_col:
-        st.markdown('<div class="section-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">24h Atmospheric Trends</div>', unsafe_allow_html=True)
+        st.markdown("#### 📈 24h Atmospheric Trends")
 
         # AQI trend for top 5 most polluted cities
         top5 = latest.head(5)["city"].tolist()
@@ -295,19 +295,19 @@ def main():
 
         fig_trend.update_layout(
             paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(237,247,241,0.5)",
-            font_color="#5a7a67",
+            plot_bgcolor="#162419",
+            font_color="#a7c4b0",
             height=240,
             margin=dict(l=0,r=0,t=10,b=0),
             yaxis=dict(
-                range=[0,6], gridcolor="#e8f0eb",
+                range=[0,6], gridcolor="#1e3a28",
                 tickvals=[1,2,3,4,5],
                 ticktext=["Good","Fair","Mod","Poor","V.Poor"]
             ),
-            xaxis=dict(gridcolor="#e8f0eb", showticklabels=False),
+            xaxis=dict(gridcolor="#1e3a28", showticklabels=False),
             legend=dict(
                 bgcolor="rgba(0,0,0,0)",
-                font=dict(size=11, color="#0f2d1f"),
+                font=dict(size=11, color="#e2f5e9"),
                 orientation="h",
                 yanchor="bottom", y=-0.15,
             ),
@@ -331,8 +331,7 @@ def main():
     cities_col, bar_col = st.columns([4, 6], gap="medium")
 
     with cities_col:
-        st.markdown('<div class="section-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">City Rankings</div>', unsafe_allow_html=True)
+        st.markdown("#### 🏙️ City Rankings")
 
         for _, row in latest.iterrows():
             badge = aqi_class(row["aqi_label"])
@@ -358,8 +357,7 @@ def main():
         st.markdown('</div>', unsafe_allow_html=True)
 
     with bar_col:
-        st.markdown('<div class="section-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">PM2.5 Comparison</div>', unsafe_allow_html=True)
+        st.markdown("#### 🔬 PM2.5 Comparison")
 
         fig_bar = go.Figure(go.Bar(
             x=latest.sort_values("pm25")["city"],
@@ -375,11 +373,11 @@ def main():
         ))
         fig_bar.update_layout(
             paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(237,247,241,0.5)",
-            font_color="#5a7a67",
+            plot_bgcolor="#162419",
+            font_color="#a7c4b0",
             height=320,
             margin=dict(l=0,r=0,t=10,b=0),
-            yaxis=dict(gridcolor="#e8f0eb", title="PM2.5 (µg/m³)"),
+            yaxis=dict(gridcolor="#1e3a28", title="PM2.5 (µg/m³)", tickfont=dict(color="#a7c4b0")),
             xaxis=dict(gridcolor="rgba(0,0,0,0)"),
             showlegend=False
         )
@@ -395,6 +393,88 @@ def main():
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── forecast section ───────────────────────────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("""
+    <div style="padding: 0 32px">
+        <div class="section-card">
+            <div class="section-title">AQI Forecast — next 6 hours</div>
+    """, unsafe_allow_html=True)
+
+    # city selector for forecast
+    all_cities_list = sorted(df["city"].unique().tolist())
+
+    fc_col1, fc_col2 = st.columns([3, 1])
+    with fc_col1:
+        selected_fc_city = st.selectbox(
+            "Select city to forecast",
+            options=all_cities_list,
+            index=0,
+            key="forecast_city"
+        )
+    with fc_col2:
+        forecast_method = st.radio(
+            "Method",
+            options=["Both", "Prophet only", "Linear only"],
+            index=0,
+            key="forecast_method"
+        )
+
+    city_fc_df = df[df["city"] == selected_fc_city].copy()
+
+    if len(city_fc_df) < 3:
+        st.warning(f"Not enough data for {selected_fc_city} yet. "
+                f"Run pipeline a few more times to collect data.")
+    else:
+        if forecast_method in ["Both", "Linear only"]:
+            fig_lin = linear_forecast(city_fc_df, selected_fc_city)
+            if fig_lin:
+                st.markdown(
+                    '<div style="font-size:13px; margin-bottom:6px"> '
+                    'Linear trend — extends recent pattern forward</div>',
+                    unsafe_allow_html=True
+                )
+                fc_lin_col, fc_lin_spacer = st.columns([8, 2])
+                with fc_lin_col:
+                    st.plotly_chart(fig_lin, use_container_width=True)
+
+        if forecast_method in ["Both", "Prophet only"]:
+            with st.spinner(f"Running Prophet model for {selected_fc_city}..."):
+                fig_proph = prophet_forecast(city_fc_df, selected_fc_city)
+            if fig_proph:
+                st.markdown(
+                    '<div style="font-size:13px; color:#6b9e7e; margin-bottom:6px">'
+                    'Prophet model — finds patterns + shows 80% confidence interval</div>',
+                    unsafe_allow_html=True
+                )
+                fc_pr_col, fc_pr_spacer = st.columns([8, 2])
+                with fc_pr_col:
+                    st.plotly_chart(fig_proph, use_container_width=True)
+
+            # explanation card below the charts
+            st.markdown(f"""
+            <div style="background:#1a2e1f; border-radius:12px; padding:14px 18px;
+                        border-left:4px solid #4ade80; margin-top:8px;">
+                <div style="font-size:12px; font-weight:700; color:#4ade80;
+                            text-transform:uppercase; letter-spacing:0.8px;
+                            margin-bottom:6px;">
+                    How to read this forecast
+                </div>
+                <div style="font-size:13px; color:#a7c4b0; line-height:1.7">
+                    The <span style="color:#4ade80">green line</span> shows
+                    historical AQI readings. The
+                    <span style="color:#fb923c">orange line</span> after the
+                    dotted "Now" marker is the predicted AQI for the next 6 hours.
+                    The <span style="color:#fb923c; opacity:0.6">shaded orange area</span>
+                    (Prophet only) is the 80% confidence interval — the model is
+                    80% sure the real value will fall inside that band.
+                    Prophet uses Meta's open-source forecasting library trained on
+                    your {len(city_fc_df)} {selected_fc_city} readings.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        st.markdown('</div></div>', unsafe_allow_html=True)
 
     # ── raw data expander ──────────────────────────────────────
     with st.expander("🗄️ View Raw Sensor Data — last 100 observations"):
@@ -424,7 +504,7 @@ def main():
     # ── footer ─────────────────────────────────────────────────
     st.markdown("""
     <div style="text-align:center; padding: 24px; font-size:12px; color:#5a7a67;
-                border-top: 1px solid #e8f0eb; margin-top: 16px;">
+                border-top: 1px solid #1e3a28; margin-top: 16px;">
         © 2026 NEPALAQIMONITOR · BUILT WITH PYTHON, STREAMLIT & PLOTLY
     </div>
     """, unsafe_allow_html=True)
