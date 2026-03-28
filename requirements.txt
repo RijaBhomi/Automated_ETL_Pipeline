@@ -3,6 +3,7 @@ pandas
 sqlalchemy
 streamlit==1.31.0
 altair==4.2.2
+pillow==10.2.0
 python-dotenv
 schedule
 plotly
